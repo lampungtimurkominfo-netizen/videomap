@@ -3,85 +3,151 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VideoMap Interaktif - Cilacap</title>
+    <title>VideoMap - Lampung Timur</title>
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
     <style>
-        body { margin: 0; display: flex; flex-direction: column; height: 100vh; font-family: sans-serif; }
-        #video-section { height: 40%; background: #000; position: relative; }
-        #map { height: 60%; width: 100%; cursor: crosshair; }
+        body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
+        #video-container { height: 45%; background: #000; position: relative; box-shadow: 0 2px 10px rgba(0,0,0,0.3); z-index: 10; }
+        #map { height: 55%; width: 100%; }
         #player { width: 100%; height: 100%; }
-        .instructions { 
-            position: absolute; top: 10px; left: 10px; 
-            background: rgba(255,255,255,0.9); padding: 8px; 
-            border-radius: 4px; font-size: 11px; z-index: 1000; 
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        
+        .overlay-info {
+            position: absolute; top: 10px; left: 10px;
+            background: rgba(0, 0, 0, 0.7); color: white;
+            padding: 8px 15px; border-radius: 20px;
+            font-size: 12px; pointer-events: none; z-index: 1000;
         }
     </style>
 </head>
 <body>
 
-<div id="video-section">
+<div id="video-container">
     <div id="player"></div>
-    <div class="instructions">
-        <strong>Tips:</strong> Klik pada jalur biru di peta untuk melompat ke menit video tersebut.
-    </div>
+    <div class="overlay-info" id="status">Memuat data sensor...</div>
 </div>
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
+    // Konfigurasi Utama
     const youtubeId = 'FImt8Q6sOXo';
-    const gpxFilePath = 'ruasjalan15.gpx'; // Sesuaikan nama file .gpx Anda
+    const gpxRawUrl = 'https://raw.githubusercontent.com/lampungtimurkominfo-netizen/videomap/refs/heads/main/ruasjalan15.gpx';
 
     let map, marker, player, trackLine;
     let routeData = []; 
 
-    // 1. Inisialisasi Map
-    map = L.map('map').setView([-7.71, 109.01], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    // 1. Inisialisasi Peta
+    map = L.map('map', { zoomControl: false }).setView([-5.1, 105.7], 12); 
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    // 2. Load GPX & Bangun Logika Interaktif
-    fetch(gpxFilePath)
-        .then(res => res.text())
-        .then(xmlText => {
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // 2. Load GPX dari Link Raw
+    fetch(gpxRawUrl)
+        .then(response => {
+            if (!response.ok) throw new Error("Gagal akses file raw GitHub");
+            return response.text();
+        })
+        .then(gpxData => {
             const parser = new DOMParser();
-            const xml = parser.parseFromString(xmlText, "text/xml");
+            const xml = parser.parseFromString(gpxData, "text/xml");
             const points = xml.getElementsByTagName("trkpt");
+            
             let firstTime = null;
 
             for (let i = 0; i < points.length; i++) {
                 const lat = parseFloat(points[i].getAttribute("lat"));
                 const lon = parseFloat(points[i].getAttribute("lon"));
-                const time = new Date(points[i].getElementsByTagName("time")[0].textContent);
                 
-                if (i === 0) firstTime = time;
-                const seconds = (time - firstTime) / 1000;
+                // Parsing waktu (jika ada)
+                let seconds = 0;
+                const timeTag = points[i].getElementsByTagName("time")[0];
+                if (timeTag) {
+                    const currentTime = new Date(timeTag.textContent);
+                    if (!firstTime) firstTime = currentTime;
+                    seconds = (currentTime - firstTime) / 1000;
+                } else {
+                    // Fallback jika tidak ada tag waktu: asumsi 1 point = 1 detik
+                    seconds = i; 
+                }
 
                 routeData.push({ time: seconds, latlng: [lat, lon] });
             }
 
-            // Gambar Jalur
+            // Gambar Garis Jalan
             trackLine = L.polyline(routeData.map(d => d.latlng), {
-                color: '#3388ff',
-                weight: 6,
-                opacity: 0.6
+                color: '#2ecc71',
+                weight: 5,
+                opacity: 0.8
             }).addTo(map);
 
-            // EVENT KLIK PADA JALUR
+            // Sesuaikan tampilan peta ke jalur
+            map.fitBounds(trackLine.getBounds());
+
+            // Tambahkan Marker Posisi
+            marker = L.circleMarker(routeData[0].latlng, {
+                color: '#e74c3c', radius: 9, fillOpacity: 1, weight: 3, fillColor: '#fff'
+            }).addTo(map);
+
+            // INTERAKTIF: Klik peta -> Video melompat
             trackLine.on('click', function(e) {
-                findClosestPoint(e.latlng);
+                syncVideoToMap(e.latlng);
             });
 
-            marker = L.circleMarker(routeData[0].latlng, {
-                color: 'red', radius: 8, fillOpacity: 1
-            }).addTo(map);
-
-            map.fitBounds(trackLine.getBounds());
+            document.getElementById('status').innerText = "Data Sinkron - Klik jalur untuk navigasi";
+        })
+        .catch(err => {
+            document.getElementById('status').innerText = "Error: " + err.message;
         });
 
-    // 3. Fungsi Mencari Titik Terdekat saat Peta Diklik
-    function findClosestPoint(clickedLatLng) {
+    // 3. Fungsi YouTube API
+    var tag = document.createElement('script');
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(tag);
+
+    function onYouTubeIframeAPIReady() {
+        player = new YT.Player('player', {
+            videoId: youtubeId,
+            playerVars: { 'autoplay': 0, 'rel': 0 },
+            events: { 'onStateChange': onPlayerStateChange }
+        });
+    }
+
+    function onPlayerStateChange(event) {
+        if (event.data == YT.PlayerState.PLAYING) {
+            updateMarkerPosition();
+        }
+    }
+
+    // 4. SINKRONISASI: Video ke Peta
+    function updateMarkerPosition() {
+        if (player && player.getPlayerState() === YT.PlayerState.PLAYING) {
+            const currentTime = player.getCurrentTime();
+            
+            // Cari titik koordinat terdekat berdasarkan waktu video
+            const closest = routeData.reduce((prev, curr) => 
+                (Math.abs(curr.time - currentTime) < Math.abs(prev.time - currentTime) ? curr : prev)
+            );
+
+            if (closest) {
+                marker.setLatLng(closest.latlng);
+                
+                // Auto-pan: Geser peta perlahan agar marker tetap di tengah
+                if (!map.getBounds().contains(closest.latlng)) {
+                    map.panTo(closest.latlng);
+                }
+            }
+            requestAnimationFrame(updateMarkerPosition);
+        }
+    }
+
+    // 5. SINKRONISASI: Peta ke Video
+    function syncVideoToMap(clickedLatLng) {
         let minDistance = Infinity;
         let targetTime = 0;
 
@@ -93,44 +159,9 @@
             }
         });
 
-        // Lompat ke waktu video (seek)
-        if (player && player.seekTo) {
+        if (player) {
             player.seekTo(targetTime, true);
             player.playVideo();
-        }
-    }
-
-    // 4. YouTube API & Sync (Video -> Map)
-    var tag = document.createElement('script');
-    tag.src = "https://www.youtube.com/iframe_api";
-    document.head.appendChild(tag);
-
-    function onYouTubeIframeAPIReady() {
-        player = new YT.Player('player', {
-            videoId: youtubeId,
-            events: { 'onStateChange': onPlayerStateChange }
-        });
-    }
-
-    function onPlayerStateChange(event) {
-        if (event.data == YT.PlayerState.PLAYING) {
-            updateMarker();
-        }
-    }
-
-    function updateMarker() {
-        if (player && player.getPlayerState() === YT.PlayerState.PLAYING) {
-            const now = player.getCurrentTime();
-            const closest = routeData.reduce((prev, curr) => 
-                (Math.abs(curr.time - now) < Math.abs(prev.time - now) ? curr : prev)
-            );
-
-            if (closest) {
-                marker.setLatLng(closest.latlng);
-                // Opsional: aktifkan jika ingin map bergerak otomatis mengikuti video
-                // map.panTo(closest.latlng); 
-            }
-            requestAnimationFrame(updateMarker);
         }
     }
 </script>
