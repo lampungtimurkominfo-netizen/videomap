@@ -1,13 +1,45 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VideoMap Smooth Sync</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; font-family: sans-serif; }
+        #video-section { height: 40%; background: #000; position: relative; }
+        #map { height: 60%; width: 100%; }
+        #player { width: 100%; height: 100%; }
+        .status-overlay {
+            position: absolute; bottom: 10px; left: 10px;
+            background: rgba(0,0,0,0.8); color: #00ff00;
+            padding: 5px 12px; border-radius: 4px; font-size: 11px; z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+
+<div id="video-section">
+    <div id="player"></div>
+    <div class="status-overlay" id="status">Mengunduh data jalan...</div>
+</div>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script>
     const youtubeId = 'FImt8Q6sOXo';
     const gpxRawUrl = 'https://raw.githubusercontent.com/lampungtimurkominfo-netizen/videomap/refs/heads/main/ruasjalan15.gpx';
 
     let map, marker, player, trackLine;
     let routeData = []; 
+    let isDataLoaded = false;
 
-    map = L.map('map').setView([-5.094, 105.340], 16);
+    // 1. Inisialisasi Peta
+    map = L.map('map').setView([-5.094, 105.340], 15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
+    // 2. Load & Parse GPX
     fetch(gpxRawUrl)
         .then(res => res.text())
         .then(xmlText => {
@@ -15,59 +47,58 @@
             const xml = parser.parseFromString(xmlText, "text/xml");
             const points = xml.getElementsByTagName("wpt"); 
             
+            if (points.length === 0) throw new Error("File GPX tidak terbaca atau kosong");
+
             let firstTime = null;
+            let tempRoute = [];
+
             for (let i = 0; i < points.length; i++) {
                 const lat = parseFloat(points[i].getAttribute("lat"));
                 const lon = parseFloat(points[i].getAttribute("lon"));
                 const timeStr = points[i].getElementsByTagName("time")[0]?.textContent;
                 
-                if (lat && lon) {
-                    const currentTime = new Date(timeStr);
-                    if (!firstTime) firstTime = currentTime;
-                    const seconds = (currentTime - firstTime) / 1000;
-                    routeData.push({ time: seconds, lat: lat, lng: lon });
+                if (!isNaN(lat) && !isNaN(lon)) {
+                    let seconds = 0;
+                    if (timeStr) {
+                        const currentTime = new Date(timeStr).getTime();
+                        if (firstTime === null) firstTime = currentTime;
+                        seconds = (currentTime - firstTime) / 1000;
+                    } else {
+                        seconds = i * 3; // Fallback jika tidak ada waktu
+                    }
+                    tempRoute.push({ time: seconds, lat: lat, lng: lon });
                 }
             }
 
+            routeData = tempRoute;
+
+            // Gambar Jalur
             trackLine = L.polyline(routeData.map(d => [d.lat, d.lng]), {
-                color: '#2ecc71', weight: 5, opacity: 0.7
+                color: '#2ecc71', weight: 6, opacity: 0.8
             }).addTo(map);
 
             map.fitBounds(trackLine.getBounds());
 
-            marker = L.circleMarker(routeData[0] ? [routeData[0].lat, routeData[0].lng] : [0,0], {
-                color: '#e74c3c', radius: 7, fillOpacity: 1, fillColor: 'white', weight: 3
+            // Marker awal
+            marker = L.circleMarker([routeData[0].lat, routeData[0].lng], {
+                color: '#e74c3c', radius: 8, fillOpacity: 1, fillColor: 'white', weight: 3
             }).addTo(map);
 
+            isDataLoaded = true;
+            document.getElementById('status').innerText = "Selesai: " + routeData.length + " titik sinkron.";
+            
+            // Klik peta untuk seek video
             trackLine.on('click', (e) => {
-                const closest = findClosestPointToClick(e.latlng);
+                const closest = findClosestPoint(e.latlng);
                 if (player) player.seekTo(closest.time, true);
             });
+        })
+        .catch(err => {
+            document.getElementById('status').innerText = "Error: " + err.message;
+            console.error(err);
         });
 
-    // --- FUNGSI INTERPOLASI AGAR SMOOTH ---
-    function interpolate(now) {
-        // Cari dua titik di mana waktu sekarang berada di antaranya
-        for (let i = 0; i < routeData.length - 1; i++) {
-            const p1 = routeData[i];
-            const p2 = routeData[i + 1];
-
-            if (now >= p1.time && now <= p2.time) {
-                // Hitung rasio kemajuan antara dua titik tersebut (0.0 sampai 1.0)
-                const ratio = (now - p1.time) / (p2.time - p1.time);
-                
-                // Hitung posisi lat/lng baru di antara p1 dan p2
-                const lat = p1.lat + (p2.lat - p1.lat) * ratio;
-                const lng = p1.lng + (p2.lng - p1.lng) * ratio;
-                
-                return [lat, lng];
-            }
-        }
-        // Jika sudah di luar batas waktu GPX, kembalikan titik terakhir/pertama
-        if (now < routeData[0].time) return [routeData[0].lat, routeData[0].lng];
-        return [routeData[routeData.length-1].lat, routeData[routeData.length-1].lng];
-    }
-
+    // 3. YouTube API
     var tag = document.createElement('script');
     tag.src = "https://www.youtube.com/iframe_api";
     document.head.appendChild(tag);
@@ -75,27 +106,58 @@
     function onYouTubeIframeAPIReady() {
         player = new YT.Player('player', {
             videoId: youtubeId,
-            events: { 'onStateChange': (e) => { if(e.data == 1) animate(); } }
+            playerVars: { 'rel': 0, 'showinfo': 0 },
+            events: { 'onStateChange': onPlayerStateChange }
         });
     }
 
-    function animate() {
-        if (player && player.getPlayerState() === 1) {
-            const now = player.getCurrentTime();
-            const smoothedLatLng = interpolate(now);
-            
-            if (smoothedLatLng) {
-                marker.setLatLng(smoothedLatLng);
-                // Ikuti marker secara otomatis
-                map.panTo(smoothedLatLng, { animate: true, duration: 0.1 });
-            }
-            requestAnimationFrame(animate);
+    function onPlayerStateChange(event) {
+        if (event.data == YT.PlayerState.PLAYING) {
+            requestAnimationFrame(smoothUpdate);
         }
     }
 
-    function findClosestPointToClick(latlng) {
+    // 4. Interpolasi Smooth
+    function smoothUpdate() {
+        if (!isDataLoaded || !player || player.getPlayerState() !== 1) return;
+
+        const now = player.getCurrentTime();
+        let currentPos = null;
+
+        // Cari posisi di antara dua titik (Interpolasi)
+        for (let i = 0; i < routeData.length - 1; i++) {
+            const p1 = routeData[i];
+            const p2 = routeData[i + 1];
+
+            if (now >= p1.time && now <= p2.time) {
+                const ratio = (now - p1.time) / (p2.time - p1.time);
+                const lat = p1.lat + (p2.lat - p1.lat) * ratio;
+                const lng = p1.lng + (p2.lng - p1.lng) * ratio;
+                currentPos = [lat, lng];
+                break;
+            }
+        }
+
+        // Jika waktu video melebihi data GPX, ambil titik terakhir
+        if (!currentPos && now > 0) {
+            const last = routeData[routeData.length - 1];
+            currentPos = [last.lat, last.lng];
+        }
+
+        if (currentPos) {
+            marker.setLatLng(currentPos);
+            // Opsional: aktifkan baris bawah jika ingin peta selalu mengikuti marker
+            // map.panTo(currentPos); 
+        }
+
+        requestAnimationFrame(smoothUpdate);
+    }
+
+    function findClosestPoint(latlng) {
         return routeData.reduce((prev, curr) => 
             L.latLng(curr.lat, curr.lng).distanceTo(latlng) < L.latLng(prev.lat, prev.lng).distanceTo(latlng) ? curr : prev
         );
     }
 </script>
+</body>
+</html>
