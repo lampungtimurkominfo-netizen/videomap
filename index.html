@@ -88,6 +88,7 @@
     const youtubeId = 'FImt8Q6sOXo';
     const gpxRawUrl = 'https://raw.githubusercontent.com/lampungtimurkominfo-netizen/videomap/refs/heads/main/ruasjalan15.gpx';
     // === DATA JEMBATAN (TANPA UBAH GPX) ===
+    /*
     const bridgePoint = {
         id: "KB-18-0007-0015-J001",
         name: "R.015-J01",
@@ -126,6 +127,7 @@
         </button>
         </div>
     `);
+    */
 
     let map, marker, player, trackLine;
     let routeData = []; 
@@ -199,6 +201,7 @@
     tag.src = "https://www.youtube.com/iframe_api";
     document.head.appendChild(tag);
 
+    /*
     function focusBridge() {
         map.setView(
         [bridgePoint.lat, bridgePoint.lng],
@@ -206,7 +209,7 @@
         { animate: true }
         );
     }
-
+    */
 
     function onYouTubeIframeAPIReady() {
         player = new YT.Player('player', {
@@ -230,6 +233,7 @@
         let currentPos = null;
 
         // === DETEKSI MENDEKATI JEMBATAN ===
+        /*
         const bridgeLatLng = L.latLng(bridgePoint.lat, bridgePoint.lng);
         const markerLatLng = L.latLng(currentPos[0], currentPos[1]);
 
@@ -238,6 +242,7 @@
             bridgeMarker.openPopup();
             }
         }
+        */
 
         // Cari posisi di antara dua titik (Interpolasi)
         for (let i = 0; i < routeData.length - 1; i++) {
