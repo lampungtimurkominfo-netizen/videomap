@@ -88,7 +88,7 @@
     const youtubeId = 'FImt8Q6sOXo';
     const gpxRawUrl = 'https://raw.githubusercontent.com/lampungtimurkominfo-netizen/videomap/refs/heads/main/ruasjalan15.gpx';
     // === DATA JEMBATAN (TANPA UBAH GPX) ===
-    /*
+    
     const bridgePoint = {
         id: "KB-18-0007-0015-J001",
         name: "R.015-J01",
@@ -98,8 +98,19 @@
         zoom: 18
     };
 
+    
+    
+
+    let map, marker, player, trackLine, bridgeMarker;
+    let routeData = []; 
+    let isDataLoaded = false;
+
+    // 1. Inisialisasi Peta
+    map = L.map('map').setView([-5.094, 105.340], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
     // === MARKER JEMBATAN ===
-    const bridgeMarker = L.marker(
+    bridgeMarker = L.marker(
         [bridgePoint.lat, bridgePoint.lng],
         {
             icon: L.divIcon({
@@ -127,15 +138,6 @@
         </button>
         </div>
     `);
-    */
-
-    let map, marker, player, trackLine;
-    let routeData = []; 
-    let isDataLoaded = false;
-
-    // 1. Inisialisasi Peta
-    map = L.map('map').setView([-5.094, 105.340], 15);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
     // 2. Load & Parse GPX
     fetch(gpxRawUrl)
@@ -201,16 +203,6 @@
     tag.src = "https://www.youtube.com/iframe_api";
     document.head.appendChild(tag);
 
-    /*
-    function focusBridge() {
-        map.setView(
-        [bridgePoint.lat, bridgePoint.lng],
-        bridgePoint.zoom,
-        { animate: true }
-        );
-    }
-    */
-
     function onYouTubeIframeAPIReady() {
         player = new YT.Player('player', {
             videoId: youtubeId,
@@ -270,12 +262,26 @@
             map.panTo(currentPos); 
         }
 
+        /* === AUTO POPUP SAAT MENDEKATI JEMBATAN === */
+        const d = L.latLng(currentPos).distanceTo([bridgePoint.lat, bridgePoint.lng]);
+        if (d < 15 && !bridgeMarker.isPopupOpen()) {
+            bridgeMarker.openPopup();
+        }
+        
         requestAnimationFrame(smoothUpdate);
     }
 
     function findClosestPoint(latlng) {
         return routeData.reduce((prev, curr) => 
             L.latLng(curr.lat, curr.lng).distanceTo(latlng) < L.latLng(prev.lat, prev.lng).distanceTo(latlng) ? curr : prev
+        );
+    }
+
+    function focusBridge() {
+        map.setView(
+        [bridgePoint.lat, bridgePoint.lng],
+        bridgePoint.zoom,
+        { animate: true }
         );
     }
 </script>
