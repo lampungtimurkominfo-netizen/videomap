@@ -193,7 +193,21 @@
                 color: '#2ecc71', weight: 6, opacity: 0.8
             }).addTo(map);
 
+            function fixMapAfterIframeLoad() {
+                setTimeout(() => {
+                map.invalidateSize(true);
+
+            if (trackLine) {
+                map.fitBounds(trackLine.getBounds(), {
+                    padding: [20, 20],
+                    animate: false
+                });
+                }
+                }, 300);
+            }       
+
             map.fitBounds(trackLine.getBounds());
+            fixMapAfterIframeLoad();
 
             // Marker awal
             marker = L.circleMarker([routeData[0].lat, routeData[0].lng], {
