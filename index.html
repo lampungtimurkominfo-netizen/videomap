@@ -123,20 +123,36 @@
     ).addTo(map);
 
     bridgeMarker.bindPopup(`
-        <div style="font-size:13px">
-        <b>${bridgePoint.name}</b><br>
+    <div style="font-size:13px; line-height:1.4">
+        <b>🏗 ${bridgePoint.name}</b><br>
         <small>${bridgePoint.road}</small><br><br>
+
         <button onclick="focusBridge()"
             style="
-                background:#27ae60;
-                color:#fff;
+                width:100%;
+                margin-bottom:6px;
                 padding:6px 10px;
+                background:#2ecc71;
+                color:white;
                 border:none;
                 border-radius:4px;
                 cursor:pointer;">
             📍 Fokus ke Jembatan
         </button>
-        </div>
+
+        <a href="https://www.google.com/maps?q=${bridgePoint.lat},${bridgePoint.lng}"
+           target="_blank"
+           style="
+                display:block;
+                text-align:center;
+                padding:6px 10px;
+                background:#3498db;
+                color:white;
+                text-decoration:none;
+                border-radius:4px;">
+            🗺 Buka di Google Maps
+        </a>
+    </div>
     `);
 
     // 2. Load & Parse GPX
