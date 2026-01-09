@@ -87,6 +87,45 @@
 <script>
     const youtubeId = 'FImt8Q6sOXo';
     const gpxRawUrl = 'https://raw.githubusercontent.com/lampungtimurkominfo-netizen/videomap/refs/heads/main/ruasjalan15.gpx';
+    // === DATA JEMBATAN (TANPA UBAH GPX) ===
+    const bridgePoint = {
+        id: "KB-18-0007-0015-J001",
+        name: "R.015-J01",
+        road: "Adirejo - Batas Kota Metro (Karang Rejo)",
+        lat: -5.0900361,
+        lng: 105.3394861,
+        zoom: 18
+    };
+
+    // === MARKER JEMBATAN ===
+    const bridgeMarker = L.marker(
+        [bridgePoint.lat, bridgePoint.lng],
+        {
+            icon: L.divIcon({
+            className: "bridge-icon",
+            html: "🏗",
+            iconSize: [30, 30],
+            iconAnchor: [15, 30]
+            })
+        }
+    ).addTo(map);
+
+    bridgeMarker.bindPopup(`
+        <div style="font-size:13px">
+        <b>${bridgePoint.name}</b><br>
+        <small>${bridgePoint.road}</small><br><br>
+        <button onclick="focusBridge()"
+            style="
+                background:#27ae60;
+                color:#fff;
+                padding:6px 10px;
+                border:none;
+                border-radius:4px;
+                cursor:pointer;">
+            📍 Fokus ke Jembatan
+        </button>
+        </div>
+    `);
 
     let map, marker, player, trackLine;
     let routeData = []; 
@@ -160,6 +199,15 @@
     tag.src = "https://www.youtube.com/iframe_api";
     document.head.appendChild(tag);
 
+    function focusBridge() {
+        map.setView(
+        [bridgePoint.lat, bridgePoint.lng],
+        bridgePoint.zoom,
+        { animate: true }
+        );
+    }
+
+
     function onYouTubeIframeAPIReady() {
         player = new YT.Player('player', {
             videoId: youtubeId,
@@ -180,6 +228,16 @@
 
         const now = player.getCurrentTime();
         let currentPos = null;
+
+        // === DETEKSI MENDEKATI JEMBATAN ===
+        const bridgeLatLng = L.latLng(bridgePoint.lat, bridgePoint.lng);
+        const markerLatLng = L.latLng(currentPos[0], currentPos[1]);
+
+        if (markerLatLng.distanceTo(bridgeLatLng) < 15) {
+            if (!bridgeMarker.isPopupOpen()) {
+            bridgeMarker.openPopup();
+            }
+        }
 
         // Cari posisi di antara dua titik (Interpolasi)
         for (let i = 0; i < routeData.length - 1; i++) {
